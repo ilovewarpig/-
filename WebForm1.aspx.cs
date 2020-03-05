@@ -40,7 +40,7 @@ namespace WebApplication1
             }
         }
 
-        // 将原始图片裁剪为
+        // 将原始图片裁剪为(150*150)的彩色图像，仅用于测试OpenCvSharp, 在模型预测的时候不会调用
         public void crop_rgb(string filename, string path= "C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/arduinoPics/", int newsize=150)
         {
             int start_x, start_y;
@@ -81,6 +81,7 @@ namespace WebApplication1
 
         }
 
+        // 将预测概率化为0-1，最后没有采用，因为概率能体现相似程度。
         internal static int[] Quantized(float[,] results)
         {
             int[] q = new int[]
@@ -99,6 +100,7 @@ namespace WebApplication1
             return q;
         }
 
+        // 根据 部件id 从数据库中读取其他属性（target）
         internal static string Lookup(string id, string table= "arduino_parts", string target="weblink")
         {
 
@@ -135,8 +137,11 @@ namespace WebApplication1
             return url;
         }
 
+        // 仅用于测试TensorFlowSharp，使用模型识别本地图片, 不在其他地方调用.
+        // 完整调用在最后
         protected void Button1_Click(object sender, EventArgs e)
         {
+            // 图片预处理
             int start_x, start_y;
             Mat src = new Mat(@"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/motor_motor_000030.jpg", ImreadModes.Grayscale);
             Mat dst = new Mat();
@@ -159,20 +164,23 @@ namespace WebApplication1
 
             Rect rectcrop = new Rect(start_x, start_y, width, height);
             Mat test = new Mat(src, rectcrop);
+            
             // 图像去噪
             Cv2.BilateralFilter(test, dst, 3, 50, 10); // 双向滤波
+           
             // 增强对比度
             CLAHE clahe = Cv2.CreateCLAHE();
             clahe.SetClipLimit(2.0);  // 直方图均衡化
             clahe.SetTilesGridSize(new Size(3, 3));
             clahe.Apply(dst, dst);
-            // 缩小至标准大小
+            
+            // 缩小至标准大小(150*150)
             Cv2.Resize(dst, dst, new Size(150, 150));
             //Cv2.ImShow("mach", dst);
             //Cv2.WaitKey(0);
             Cv2.ImWrite(@"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/motor.jpg", dst);
             
-
+            // 加载cnn模型
             byte[] buffer = System.IO.File.ReadAllBytes(@"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/arduino13.pb");
             Console.WriteLine("loaded");
             using (var graph = new TensorFlow.TFGraph())
@@ -181,17 +189,17 @@ namespace WebApplication1
                 float[][][][] outfloats;
                 using (var session = new TensorFlow.TFSession(graph))
                 {
+                    // 用于保存可能性最高的三个预测结果
                     Part part1 = new Part();
                     Part part2 = new Part();
                     Part part3 = new Part();
-
+                    // 预测本地图片
                     var file = @"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/motor.jpg";
                     var runner = session.GetRunner();
                     var tensor = ImageToTensorGrayScale(file);
                     runner.AddInput(graph["conv2d_input_1"][0], tensor);
                     runner.Fetch(graph["output_1"][0]);
-                    
-
+                    // 设置模型的输入输出端
                     var output = runner.Run();
                     var vecResults = output[0].GetValue();
                     var result2 = new float[22];
@@ -202,8 +210,8 @@ namespace WebApplication1
                     a[2] = 0.3f;
                     var num = result2.Max();
                     int predict = Array.IndexOf(result2, num);
-                    //Label1.Text = (result2[predict]*100).ToString() + " %";
                     
+                    // 从数据库读取相应属性
                     var cname = Lookup(id: predict.ToString(), target: "cn_name");
                     var url = Lookup(id: predict.ToString(), target: "weblink");
                     var subpath = Lookup(id: predict.ToString(), target: "name");
@@ -211,10 +219,10 @@ namespace WebApplication1
                     part1.set(url:url, id:predict.ToString(), subpath:subpath, prob:prob, name:cname);
                     Session["pre"] = part1;
                     
+                    // 读取可能性第二高的结果
                     result2[predict] = 0;
                     num = result2.Max();
                     predict = Array.IndexOf(result2, num);
-                    //Label2.Text = (result2[predict] * 100).ToString() + " %";
                     cname = Lookup(id: predict.ToString(), target: "cn_name");
                     url = Lookup(id: predict.ToString(), target: "weblink");
                     subpath = Lookup(id: predict.ToString(), target: "name");
@@ -222,10 +230,10 @@ namespace WebApplication1
                     part2.set(url: url, id: predict.ToString(), subpath: subpath, prob: prob, name: cname);
                     Session["pre2"] = part2;                   
                     result2[predict] = 0;
-
+                    
+                    // 读取可能性第三高的结果
                     num = result2.Max();
                     predict = Array.IndexOf(result2, num);
-                    //Label3.Text = (result2[predict] * 100).ToString() + " %";
                     cname = Lookup(id: predict.ToString(), target: "cn_name");
                     url = Lookup(id: predict.ToString(), target: "weblink");
                     subpath = Lookup(id: predict.ToString(), target: "name");
@@ -233,19 +241,13 @@ namespace WebApplication1
                     part3.set(url: url, id: predict.ToString(), subpath: subpath, prob: prob, name: cname);
                     Session["pre3"] = part3;
                     result2[predict] = 0;
-                    
-
-                    //Part part1 = new Part();
-                    //part1.set(id: "1", name: "主板", subpath: "mainchip", prob: 0.95f * 100, url: "https://www.baidu.com");
-                    //Session["pre"] = part1;
-                    //Session["pre"] = 1;
                 }
             }
-            //Session["pre"] = 1;
-            
+           
             Response.Redirect("showResult.aspx");
         }
 
+        // 测试session
         protected void Button2_Click(object sender, EventArgs e)
         {
             //Label2.Text =  Lookup("6");
@@ -256,14 +258,17 @@ namespace WebApplication1
 
         }
 
+        // 测试OpenCvSharp库
         protected void Button3_Click(object sender, EventArgs e)
         {
             crop_rgb(filename: "ultrasonic.png", newsize:300);
         }
 
+        // 文件上传按钮，目前只接受png或jpg格式
         protected void Button4_Click(object sender, EventArgs e)
         {
             string fullpath = "";
+            // 检测文件合法性
             if (FileUpload1.PostedFile.FileName == "")
             {
                 alert.Text = "无文件上传";
@@ -280,8 +285,10 @@ namespace WebApplication1
                         alert.Text = "文件必须是png或者jpg格式";
                         return;
                 }
+                
+                // 获取文件名
                 string fileName = Path.GetFileName(FileUpload1.PostedFile.FileName);
-
+                // 保存文件到本地
                 fullpath = Path.Combine(uploadDir, fileName);
                 try
                 {
@@ -293,6 +300,7 @@ namespace WebApplication1
                     alert.Text = ee.Message;
                 }
             }
+            // 图片预处理
             int start_x, start_y;
             Mat src = new Mat(fullpath, ImreadModes.Grayscale);
             Mat dst = new Mat();
@@ -315,6 +323,7 @@ namespace WebApplication1
 
             Rect rectcrop = new Rect(start_x, start_y, width, height);
             Mat test = new Mat(src, rectcrop);
+            
             // 图像去噪
             Cv2.BilateralFilter(test, dst, 3, 50, 10); // 双向滤波
             // 增强对比度
@@ -326,9 +335,10 @@ namespace WebApplication1
             Cv2.Resize(dst, dst, new Size(150, 150));
             //Cv2.ImShow("mach", dst);
             //Cv2.WaitKey(0);
+            // 处理完的图片保存到本地
             Cv2.ImWrite(@"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/temp.jpg", dst);
 
-
+            // 加载模型
             byte[] buffer = System.IO.File.ReadAllBytes(@"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/arduino13.pb");
             Console.WriteLine("loaded");
             using (var graph = new TensorFlow.TFGraph())
@@ -337,18 +347,22 @@ namespace WebApplication1
                 float[][][][] outfloats;
                 using (var session = new TensorFlow.TFSession(graph))
                 {
+                    // 用于保存可能性最高的3个预测结果
                     Part part1 = new Part();
                     Part part2 = new Part();
                     Part part3 = new Part();
-
+                    
+                    // 加载本地处理完的图像
                     var file = @"C:/Users/ilovewarpig/source/repos/WebApplication1/WebApplication1/bin/temp.jpg";
                     var runner = session.GetRunner();
                     var tensor = ImageToTensorGrayScale(file);
+                    // 图像张量化后放入模型输入端
                     runner.AddInput(graph["conv2d_input_1"][0], tensor);
+                    // 设置模型输出端
                     runner.Fetch(graph["output_1"][0]);
-
-
+                    // 运行模型
                     var output = runner.Run();
+                    // 获取结果
                     var vecResults = output[0].GetValue();
                     var result2 = new float[22];
                     output[0].GetValue(result2);
@@ -356,17 +370,21 @@ namespace WebApplication1
                     a[0] = 0.1f;
                     a[1] = 0.2f;
                     a[2] = 0.3f;
+                    
+                    // 获取可能性最高的结果
                     var num = result2.Max();
                     int predict = Array.IndexOf(result2, num);
-                    //Label1.Text = (result2[predict]*100).ToString() + " %";
-
+                    // 从数据库读取相应信息
                     var cname = Lookup(id: predict.ToString(), target: "cn_name");
                     var url = Lookup(id: predict.ToString(), target: "weblink");
                     var subpath = Lookup(id: predict.ToString(), target: "name");
                     var prob = num * 100;
+                    // 设置部件属性
                     part1.set(url: url, id: predict.ToString(), subpath: subpath, prob: prob, name: cname);
+                    // 部件放入session
                     Session["pre"] = part1;
-
+                    
+                    // 获取可能性第二高的结果
                     result2[predict] = 0;
                     num = result2.Max();
                     predict = Array.IndexOf(result2, num);
@@ -378,7 +396,8 @@ namespace WebApplication1
                     part2.set(url: url, id: predict.ToString(), subpath: subpath, prob: prob, name: cname);
                     Session["pre2"] = part2;
                     result2[predict] = 0;
-
+                    
+                    // 获取可能性第三高的结果
                     num = result2.Max();
                     predict = Array.IndexOf(result2, num);
                     //Label3.Text = (result2[predict] * 100).ToString() + " %";
@@ -389,16 +408,9 @@ namespace WebApplication1
                     part3.set(url: url, id: predict.ToString(), subpath: subpath, prob: prob, name: cname);
                     Session["pre3"] = part3;
                     result2[predict] = 0;
-
-
-                    //Part part1 = new Part();
-                    //part1.set(id: "1", name: "主板", subpath: "mainchip", prob: 0.95f * 100, url: "https://www.baidu.com");
-                    //Session["pre"] = part1;
-                    //Session["pre"] = 1;
                 }
             }
-            //Session["pre"] = 1;
-
+            // 重定向到结果页面
             Response.Redirect("showResult.aspx");
 
         }
