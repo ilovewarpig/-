@@ -16,7 +16,7 @@ namespace WebApplication1
         string url1 = "";
         string url2 = "";
         string url3 = "";
-
+        // 读取数据库, 最终没有使用这个函数
         internal static string Lookup(string id, string table = "arduino_parts", string target = "weblink")
         {
 
@@ -55,12 +55,13 @@ namespace WebApplication1
 
         protected void Page_Load(object sender, EventArgs e)
         {
+            // 检查session
             if ((Session["pre"] != null) && (Session["pre2"] != null) && (Session["pre3"] != null))
             {
                 
                 string path = ".\\arduinoPics\\";
                 
-                
+                // 输出三个预测结果
                 Part part1 = (Part)Session["pre"];
                 im1.Text = part1.get_name();
                 ib1.ImageUrl = path + part1.get_subpath()+".png";
@@ -78,9 +79,7 @@ namespace WebApplication1
                 ib3.ImageUrl = path + part3.get_subpath() + ".png";
                 lb3.Text = "匹配度: " + part3.get_prob().ToString() + "%";
                 url3 = part3.get_url();
-
-                //Object obj1 = Session["pre"];
-                //im1.Text = obj1.ToString();
+                
             }
             else
             {
@@ -94,12 +93,10 @@ namespace WebApplication1
             }
         }
 
-        
-
+        // 点击图片重定向到网络数字资源
         protected void ib1_Click(object sender, ImageClickEventArgs e)
         {
             Response.Redirect(url1);
-            //Response.Write("<script>window.open('" + url1 + "', '_blank')</script>");
         }
 
         protected void ib2_Click(object sender, ImageClickEventArgs e)
@@ -112,6 +109,7 @@ namespace WebApplication1
             Response.Redirect(url3);
         }
 
+        // 返回文件上传页面
         protected void Button1_Click(object sender, EventArgs e)
         {
             Response.Redirect("WebForm1.aspx");
