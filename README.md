@@ -11,3 +11,6 @@ TensorFlowSharp.1.15.1
 NumSharp.0.20.5
 OpenCvSharp
 
+WebApplication页面是初始页面，在该页面上上传图片。
+ShowResults页面显示图像识别的结果，展示可能性最高的三个分类，点击对应图片后直接导航至数字资源
+
